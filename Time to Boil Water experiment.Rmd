@@ -1,0 +1,190 @@
+---
+title: "Factorial Design to Investigate Time to Boil Water"
+author: "Jinping Liang 1006905976"
+date: "4/8/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(FrF2)
+```
+
+## Introduction
+Boiling water is more than usual activity in daily life. As I noticed, the time to boil water is different. Sometimes, it takes much longer than I expected. Then I wonder what factors could potentially influence the rate to boil water. By Elisa Chan, the temperature of the liquid, conductivity, whether the tank is closed or not, the volume of the tank we boil the liquid in, and altitude are all potential factors that influence the speed of boiling. Since I will use the same kettle, the most possible factors are temperature of liquid, the closeness of kettle, and the volume of liquid to boil. This study aims to explore the condition that shortens the time of a kettle to boil water and to what extent the condition alters the time.
+
+
+## Experimental Design and Data 
+To complete the objective, I conducted a replicated $2^3$ factorial design. There are three factors chosen: the initial water temperature, whether the lid is closed or not, and the water input. Each factor has two levels. See the table below. 
+
+Factors | Level 1 | Level 2 |
+--------|---------|---------|
+Initial temperature | cold (-1) | warm (1) |
+Cover on the teakettle | lid open (-1) | lid closed (1) |
+Water input | half the teakettle (-1) | full the teakettle (1) |
+
+For the first factor initial liquid temperature, I used either cold water or warm water from the tap. To ensure the temperature is fixed within each level, I rotated the tap to the same extent. The second factor cover on the teakettle is binary as well, whether the lid of the kettle is closed or open during the process. For the third factor water input has two levels: half of the teakettle is filled; all the teakettle is filled. The response is the time to boil the water, in minutes. There are a total 8 combinations of factor conditions. I repeated each condition twice. So totally, there are 16 observations in the data. All observations are measured by the same kettle. I expect that an initial warm water, a closed lid, and a lower water input will boil water faster. 
+
+Such design fulfills the objective because it considers all combinations of the factors, and the replication allows the data to incorporate the variability of the factor effects and interaction effects.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height = 2, fig.align='center'}
+data <- read.csv("305FP.csv")
+
+#data wrangling to make the column names easier to read
+data <- data %>% 
+  rename(time = Time.to.Boil.Water, temp = Initial.Water.Temperature..Hot...cold., 
+         cover = Cover, input = Water.Input) %>% 
+  select(time, temp, cover, input)
+
+#graph the distribution of the response
+data %>% 
+  ggplot(aes(x = time)) +
+  geom_histogram(fill="transparent", color="black", bins=)+
+  labs(title = "Fig.1 Distribution of Time to Boil Water", 
+       x = "time to boil water (minutes)") +
+  theme_classic()
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(kableExtra)
+
+summary_table <- data %>% summarise(n = n(),
+                                  min = min(time),
+                                  Q1 = quantile(time,0.25),
+                                  median = median(time),
+                                  Q3 = quantile(time,0.75),
+                                  max = max(time),
+                                  mean = mean(time), 
+                                  sd = sd(time))
+knitr::kable(summary_table, caption = "Numerical Summary of Time to Boil Water")%>% 
+  kable_styling(latex_options = "hold_position")
+```
+
+Fig.1 is the distribution of time to boil water. We can observe that our response is not normally distributed; instead, it has three modes, centered around 5, 10, and 18 respectively. From Table 2, we observe that the time ranges from 5.2 to 20.4 minutes, with a mean of 12.1 minutes and a standard deviation of 5.5 minutes. The median of 11 minutes and the third quantile of 18 minutes correspond to the modes in the graph. Overall, the distribution summary suggests a transformation on the response.
+
+
+## Statistical Analysis
+As discussed above, a transformation on the response seems necessary. "powerTansform" function in R could directly produce the ideal power transformation of the response. However, the R output suggests no transformation is needed. Therefore, the original time will be used as the response in model fitting. 
+
+To ensure no main effects and interaction effects are missed, I fit a model with all effects. After fitting the model, I employ three approaches together to determine which effects are significant. 
+
+- P-values. If an individual coefficient's p-value is smaller than a significance level of 0.05, then that effect is significant. P-values are computable here because this is a replicated factorial design.
+- 95% confidence interval. The correct CI interval shall be twice the initial bounds of the CI due to level assignment of -1 and 1 in each factor. If the confidence interval includes 0, then that effect is not statistically significant. 
+- Daniel plot by function "DanielPlot". If the predictor deviates from the general trend, then it is statistically significant to influence the response.
+- Lenth plot by function “LenthPlot”. It plots the factor affects with significance level of 0.05 with estimation on standard error. 
+
+After identifying significant terms, we can observe their main effects or interaction effects. The value of each main effect and interaction effect is 2 times their corresponding coefficient estimate. Twice the coefficient estimate matter because the levels are -1 and 1 for three factors. To estimate the effects under one factor, their difference 1-(-1) should be multiplied to the coefficient to correctly interpret the effects. Same as estimating standard deviation. The estimated variance of effect is 0.25 times the standard error. 
+
+Finally, we shall check the assumptions of linear regression, especially constant variance and normality assumption. If a residual versus fitted residual plot shows a random pattern on the distribution of points, then constant variance holds. If a normal QQ plot has no strong deviation from the standard quantile line, then the normality is satisfied.
+
+## Results
+```{r, include = FALSE}
+mod <- lm(time ~ temp*cover*input, data = data)
+
+#install.packages("car")
+library("car")
+
+#Check whether response transformation is needed
+boxCox(mod)
+p <- powerTransform(cbind(data[,-c(2, 3, 4)]))
+summary(p)
+```
+
+
+```{r, include=FALSE}
+#the coefficient summary of the initial model
+summary(mod)
+round(summary(mod)$coefficients, 4)
+
+#get the 95% CI for every effect
+round(2*confint.lm(mod), 2)
+
+0.1556*2 # estimated sd of each factorial effect
+
+round((0.1556*2)^2, 4) #estimated variance of each factorial effect
+
+0.25*0.3112 #variance of an effect
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, fig.height = 6, fig.align='center'}
+library(BsMD)
+par(mfrow = c(2, 1))
+LenthPlot(mod)
+DanielPlot(mod, half=T)
+
+#graph three interaction plots between three factors
+#interaction.plot(data$temp, data$cover, data$time, type = "l", 
+                 #trace.label = "cover", xlab = "temperature", 
+                 #ylab = "time to boil water")
+#interaction.plot(data$temp, data$input, data$time, type = "l", 
+                 #trace.label = "input", xlab = "temperature", 
+                 #ylab = "time to boil water")
+#interaction.plot(data$input, data$cover, data$time, type = "l", 
+                 #trace.label = "cover", xlab = "input", 
+                 #ylab = "time to boil water")
+```
+
+The lenth plot identifies three important factors: temperature, cover of lid, and water input. The Daniel plot indicates the importance of these factors. None of the interaction terms are significant based on these two plots. To obtain significant terms, it relies on the p-values and 95% confidence interval.
+
+
+A Summary of Coefficients in the Model (*Only significant terms are labeled with their estimation of effects*)
+
+ Factor  | Estimate | Std.Error | p-value | 95% CI | Effect |
+---------|----------|-----------|---------|--------|--------|         
+Intercept| 12.0994  | 0.1556 | 0.0000 | (23.48, 24.92) | |
+temp |-1.2494 | 0.1556 | 0.0000 | (-3.22, -1.78) |`r round(-1.2494*2, 2)` |
+cover | -1.5956 | 0.1556 | 0.0000 | (-3.91, -2.47) |`r round(-1.5956*2, 2)` |
+input | 4.8256 | 0.1556 | 0.0000 | (8.93, 10.37) |`r round(4.8256*2, 2)` |
+temp:cover | -0.2794 | 0.1556 | 0.1103 | (-1.28, 0.16) | |
+temp:input | -0.4506 | 0.1556 | 0.0200 | (-1.62, -0.18) | `r round(-0.4506*2, 2)` |
+cover:input | -0.3294 | 0.1556| 0.0671 | (-1.38, 0.06) | |
+temp:cover:input | -0.3206 | 0.1556 | 0.0733 | (-1.36, 0.08) | |
+
+
+From the above table, factor temperature, cover, and water input are significant main effects, since their p-values are extremely smaller than a significance level of 0.05. The interaction effects between temperature and input are also significant, whose p-value is 0.02. The other three interaction effects do not affect the time to boil water. The results from p-values are the same as the information informed by the 95% confidence interval. The 95% CIs that do not include 0 are: temperature (-3.22, -1.78), cover (-3.91, -2.47), water input (8.93, 10.37), and the interaction between temperature and water input (-1.62, -0.18). There is strong evidence that warm water, close the lid, lower water input and the interaction between temperature and water input generates a shorter time to boil water. 
+
+**Interpretation of Significant Main Effects and Interactions:**
+
+- If the initial water is warm, the time to boil water is `r round(1.2494*2, 2)` minutes faster than that of an initial cold water. 
+- For a full kettle of water, the time to boil water is `r round(4.8256*2, 2)` minutes longer than that of half a kettle. 
+- If the lid is closed while boiling water, the time to boil water is `r round(1.5956*2, 2)` minutes faster than the time under a open lid. 
+- The significant interaction effect between temperature and water input is dependent on each other, whose interaction effect is `r round(-0.4506*2, 2)`. 
+
+The estimated standard error for all factorial effects is the same, which is $0.1556*2 = 0.3112$, so the estimated variance is $0.3112^2$ = 0.0968. The estimated variance of effects: 0.25*0.3112 = 0.0778. 
+
+```{r, include = FALSE}
+r <- resid(mod)
+
+#Distribution plot of the residual and Normal QQ plot
+par(mfrow = c(2, 2))
+plot(r, main="distribution of residuals", ylab="residual")
+qqnorm(r, abline(a=0, b=0))
+qqline(r)
+
+#Residual plots
+plot(r~fitted(mod), main="r versus fitted Y", xlab="fitted y", ylab="residual")
+```
+
+Constance Variance and normality assumption are satisfied; thus, linear regression is appropriate to use in this model. 
+
+## Conclusion
+Through this replicated $2^3$ factorial design, I investigated how three factors (initial water temperature, water input, and cover of the lid) influence the time to boil water in a kettle. From the statistical analysis, an initial warm temperature, a lower water input, and a closed lid significantly contribute to a lower time to boil water, same as I expected when I designed the experiment. They all have a p-value smaller than 0.05 and their 95% confidence intervals do not contain 0. In addition, initial water temperature and water input are dependent on each other, with a significant interaction effect of `r round(-0.4506*2, 2)`. This experiment provides a great insight to factors that affect our time approximation of boiling water. The time to boil water would be faster if the initial water is warm; and we close the lid during boiling, and put less water to boil. 
+
+
+## Discussion and Limitation
+Though the model explains the relationship between factors and response with an adjusted $R^2$ of 98.71%, there is still a limitation. The distribution of the response is not normal. Usually, a log or power transformation is expected. However, in our statistical analysis, the output suggests no transformation. But the plot of log-likelihood shows the mode ideal power is slightly less than 0. Taking a -0.1 power might better improve the model. But this would make the model complicated and difficult to interpret. 
+
+
+## Reference
+Elisa Chan. 2020.  How Long Does It Take to Boil Water? https://beezzly.com/home/tips/how-long-does-it-take-to-boil-water. 
+
+Lenth, R. V. (1989). "Quick and Easy Analysis of Unreplicated Factorials". Technometrics Vol. 31, No. 4. pp. 469–473.
+
+
+
+

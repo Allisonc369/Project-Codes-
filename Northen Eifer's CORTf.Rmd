@@ -1,0 +1,516 @@
+---
+title: "FP code"
+author: "Jinping Liang"
+date: "12/11/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("tidyverse")
+
+data <- read.csv("Harms et al_Proc B_ final data for CORTf MS.csv")
+
+glimpse(data)
+
+
+data1 <- data %>% 
+  rename(cortf=CORTf, mass=MASS, arrival=ARRIVAL, rel_arrival=relARRIVAL, lay=LAY, rel_lay=relLAY, nest=NEST, survival=SURVIVAL, year=YEAR)
+```
+
+
+```{r}
+#split the whole dataset into training and test set
+set.seed(976)
+train <- data1[sample(1:nrow(data1), 142, replace=F), ]
+test <- data1[which(!(data1$ID %in% train$ID)),]
+```
+
+\newpage
+Variable | Description | Mean $\pm$ sd | Correlation with CORTf level |
+---------|-------------|-------------|--------------|
+cortf | feature corticosterone level  | 5.111 $\pm$ 1.92 | |
+arrival | arrival Date on the breeding colony | 172.5 $\pm$ 4.17 | 0.0029 |
+rel_arrival | relative arrival date compared to the previous year | 0.4437 $\pm$ 3.68 |0.1506|
+mass | body mass of eiders | 2208 $\pm$ 181.32| -0.2877 |
+lay | laying date | 182.5 $\pm$ 6.13 | 0.1142 |
+rel_lay | relative laying date compared to the previous year | 0.042 $\pm$ 5.59|0.1044|
+nest | reproduction condition of eiders (1=successful)| 0.4085 | |
+survival | survival condition under avian chorela outbreak (1=successful)| 0.1338 ||
+
+
+```{r}
+#calculate mean and standard deviations for training and test set
+summary(train)
+mtr <- apply(train[,-c(1,2)], 2, mean)
+sdtr <- apply(train[,-c(1,2)], 2, sd)
+
+summary(test)
+mtest <- apply(test[,-c(1,2)], 2, mean)
+sdtest <- apply(test[,-c(1,2)], 2, sd)
+```
+
+```{r}
+#graphical summary of all variables
+
+library("gridExtra")
+
+graph1 <- train %>% 
+  ggplot(aes(x=mass))+
+  geom_histogram(color="black", fill="grey", bins=30)+
+  labs(x="body mass", title="histogram of mass")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10)) 
+
+graph2 <- train %>% 
+  ggplot(aes(x=arrival))+
+  geom_histogram(color="black", fill="grey", bins=30)+
+  labs(x="arrival date", title="histogram of arrival")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10))
+
+graph6 <- train %>% 
+  ggplot(aes(x=rel_arrival))+
+  geom_histogram(color="black", fill="grey", bins=30)+
+  labs(x="relative arrival date", title="histogram of rel_arrival")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10))
+
+graph3 <- train %>% 
+  ggplot(aes(x=lay))+
+  geom_histogram(color="black", fill="grey", bins=30)+
+  labs(x="laying date", title="histogram of lay")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10)) 
+
+graph7 <- train %>% 
+  ggplot(aes(x=rel_lay))+
+  geom_histogram(color="black", fill="grey", bins=30)+
+  labs(x="relative laying date", title="histogram of rel_lay")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10)) 
+
+graph4 <- train %>%
+  ggplot(aes(x=nest))+
+  geom_bar(color="black", fill="grey")+
+  labs(x="reproduction success", title="barplot of reproduction")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10))
+
+graph5 <- train %>% 
+  ggplot(aes(x=survival))+
+  geom_bar(color="black", fill="grey")+
+  labs(x="disease survival", title="barplot of survival")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10)) 
+
+graph8 <- train %>% 
+  ggplot(aes(x=cortf))+
+  geom_histogram(color="black", fill="grey")+
+  labs(x="cortf level", title="histogram of cortf")+
+  theme(text = element_text(size = 10), plot.title = element_text(size = 10)) 
+
+grid.arrange(graph8, graph1, graph2, graph6, graph3, graph7, graph4, graph5, nrow=2, ncol=4)
+```
+
+```{r}
+#calculate correlation of numerical variables with the response
+attach(train)
+cor(cortf, mass)
+cor(cortf, arrival)
+cor(cortf, rel_arrival)
+cor(cortf, lay)
+cor(cortf, rel_lay)
+```
+
+
+```{r}
+#initial model without transformation
+model_full <- lm(cortf~mass+arrival+rel_arrival+lay+rel_lay+as.factor(nest)+as.factor(survival))
+summary(model_full)
+
+#install.packages("car")
+library("car")
+
+#variable transformation
+boxCox(model_full)
+p <- powerTransform(cbind(train[,-c(1,2,3,6,9,10,11)]))
+summary(p)
+```
+
+
+```{r}
+#Graph of cortf after transformation
+train %>% 
+  ggplot(aes(x=cortf^(-0.2)))+
+  geom_histogram(color="black", fill="grey")+
+  labs(x="cortf^(-0.2)", title="Histogram of cortf^(-0.2")
+```
+
+
+```{r}
+#initial model after transformation
+model_full_trans <- lm(cortf^(-0.2)~mass+arrival+rel_arrival+lay+rel_lay+as.factor(nest)+as.factor(survival))
+summary(model_full_trans)
+```
+
+\newpage
+Initial model:
+$$\hat y^{-0.2} = 0.5003 + 0.00005*x_1 + 0.0085*x_2 - 0.0099*x_3 - 0.0074*x_4$$
+$$+ 0.0068*x_5 + 0.0012*x_6(1=reproduced) +0.0069*x_7(1=survived)$$
+$y$: CORT level in feathers \
+$x_1$: body mass \
+$x_2$: arrival date on the breeding colony \
+$x_3$: relative arrival date \
+$x_4$: lay date \
+$x_5$: relative lay date\
+$x_6$: successfuly reproduction\
+$x_7$: survival condition under cholera outbreak\
+
+```{r}
+#install.packages("leaps")
+library(leaps)
+
+#all possible models
+best <- regsubsets(cortf^(-0.2) ~ ., data=train[,-c(1,2,3)], nbest=1)
+summary(best)
+```
+
+
+```{r}
+#forward selection
+library(dplyr)
+library(MASS)
+stepAIC(lm(cortf^(-0.2) ~ 1, data=train),
+        scope=list(upper=lm(cortf^(-0.2) ~ mass + arrival + rel_arrival + lay + rel_lay + as.factor(nest) + as.factor(survival), data=train)), direction = "forward", k=2)
+```
+
+
+```{r}
+#backward selection
+stepAIC(lm(cortf^(-0.2) ~  mass + arrival + rel_arrival + lay + rel_lay + as.factor(nest) + as.factor(survival), data=train),
+        scope=list(upper=lm(cortf^(-0.2) ~ 1, data=train)), direction = "backward", k=2)
+```
+
+
+```{r}
+#stepwise AIC selection
+stepAIC(lm(cortf^(-0.2) ~  mass + arrival + rel_arrival + lay + rel_lay + as.factor(nest) + as.factor(survival), data=train), direction="both", k=2)
+```
+
+
+```{r}
+#stepwise BIC selection
+stepAIC(lm(cortf^(-0.2) ~  mass + arrival + rel_arrival + lay + rel_lay + as.factor(nest) + as.factor(survival), data=train), direction="both", k=log(nrow(train)))
+```
+
+
+```{r}
+#candidate model 1
+model1 <- lm(cortf^(-0.2) ~  mass + arrival + rel_arrival + lay + rel_lay, data=train)
+summary(model1)
+```
+
+```{r}
+#Candidate model 2
+model2 <- lm(cortf^(-0.2) ~  mass + arrival + rel_arrival)
+summary(model2)
+
+#calculate vif of model 2
+vif(model2)
+```
+
+
+```{r}
+#condition 1 for model 2
+plot(cortf^(-0.2) ~ fitted(model2), main = "Y versus Y-hat", xlab="Y-hat", ylab="y")
+abline(a=0, b=1)
+lines(lowess(cortf^(-0.2) ~ fitted(model2)), lty=2)
+```
+
+```{r}
+r2 <- resid(model2)
+
+#residual vs fitted y for model 2
+plot(r2~fitted(model2), main="r versus fitted Y", xlab="fitted y", ylab="residual")
+```
+
+```{r}
+#condition 1 for model 1 (final model)
+plot(cortf^(-0.2) ~ fitted(model1), main = "Y versus Y-hat", xlab="Y-hat", ylab="y")
+abline(a=0, b=1)
+lines(lowess(cortf^(-0.2) ~ fitted(model1)), lty=2)
+```
+
+```{r}
+#condition 2 for model 1 (final model)
+pairs(train[, c(5:9)])
+```
+
+```{r}
+r <- resid(model1)
+
+#residual vs fitted y for model 1 (final model)
+plot(r~fitted(model1), main="r versus fitted Y", xlab="fitted y", ylab="residual")
+```
+
+```{r}
+#residual vs predictors for model 1 (final model)
+par(mfrow = c(3, 3))
+plot(r~fitted(model1), main="r versus fitted Y", xlab="fitted y", ylab="residual")
+plot(r~mass, main="r versus body mass", xlab="body mass", ylab="residual")
+plot(r~arrival, main="r versus arrival date", xlab="arrival date", ylab="residual")
+plot(r~rel_arrival, main="r versus relative arrival date", xlab="relative arrival date", ylab="residual")
+plot(r~lay, main="r versus laying date", xlab="laying date", ylab="residual")
+plot(r~rel_lay, main="r versus relative laying date", xlab="relative laying date", ylab="residual")
+plot(r, main="distribution of residuals", ylab="residual")
+
+qqnorm(r, abline(a=0, b=0))
+qqline(r)
+```
+
+```{r}
+#Normal QQ plot for model 1 (final model)
+plot(r, main="distribution of residuals", ylab="residual")
+
+qqnorm(r, abline(a=0, b=0))
+qqline(r)
+```
+
+
+```{r}
+n <- 142
+p <- 5
+
+#leverage points in model 1
+h <- hatvalues(model1) 
+hcut <- 2*(p+1)/n
+
+w1 <- which(h > hcut)
+w1
+```
+
+```{r}
+#outliers in model 1
+sr <- rstandard(model1)
+w2 <- which(sr < -2 | sr > 2) 
+w2
+```
+
+```{r}
+#Cook distance in model 1
+Dcutoff <- qf(0.5, p+1, n-p-1) 
+D <- cooks.distance(model1) 
+which(D > Dcutoff)
+```
+
+```{r}
+#DFFITS in model 1
+DFFITScut <- 2*sqrt((p+1)/n)
+dfs <- dffits(model1)
+w3 <- which(abs(dfs) > DFFITScut) 
+w3
+```
+
+```{r}
+#DFBETAS in model 1
+DFBETAcut <- 2/sqrt(n)
+dfb <- dfbetas(model1)
+w4 <- which(abs(dfb[,1]) > DFBETAcut) 
+w4
+
+w5 <- which(abs(dfb[,2]) > DFBETAcut) 
+w5
+
+w6 <- which(abs(dfb[,3]) > DFBETAcut) 
+w6
+
+w7 <- which(abs(dfb[,4]) > DFBETAcut) 
+w7
+
+w8 <- which(abs(dfb[,5]) > DFBETAcut) 
+w8
+
+w9 <- which(abs(dfb[,6]) > DFBETAcut) 
+w9
+```
+
+```{r}
+#plot of all problematic observations in model 1
+w <- unique(c(w1, w2, w3, w4, w5, w6, w7, w8, w9))
+
+par(mfrow=c(1,3))
+plot(train[,4]~train[,5], main="cortf transformed vs arrival", xlab="arrival", ylab="cortf^(-0.2)") 
+points(train[w,4]~train[w,5], col="red", pch=19)
+plot(train[,4]~train[,7], main="cortf transformed vs mass", xlab="body mass", ylab="cortf^(-0.2)") 
+points(train[w,4]~train[w,7], col="red", pch=19)
+plot(train[,4]~train[,8], main="cortf transformed vs lay", xlab="laying date", ylab="cortf^(-0.2)") 
+points(train[w,4]~train[w,8], col="red", pch=19)
+```
+
+```{r}
+vif(model1)
+```
+
+
+```{r}
+#candidate model 3
+model3<- lm(cortf^(-0.2) ~ mass + rel_arrival, data=train)
+summary(model3)
+```
+
+```{r}
+#anova test for candidate models
+anova(model_full_trans, model1)
+anova(model_full_trans, model2)
+anova(model_full_trans, model3)
+```
+
+
+
+```{r}
+n <- length(train$cortf)
+p <- length(coef(model2))-1
+
+#leverage points for model 2
+h <- hatvalues(model2) 
+hcut <- 2*(p+1)/n
+
+w21 <- which(h > hcut)
+w21
+```
+
+```{r}
+#outliers for model 2
+sr2 <- rstandard(model2)
+w22 <- which(sr2 < -2 | sr2 > 2) 
+w22
+```
+
+```{r}
+#Cook distance for model 2
+Dcutoff <- qf(0.5, p+1, n-p-1) 
+D <- cooks.distance(model2) 
+which(D > Dcutoff)
+```
+
+```{r}
+#DFFITS for model 2
+DFFITScut <- 2*sqrt((p+1)/n)
+dfs <- dffits(model2)
+w23 <- which(abs(dfs) > DFFITScut) 
+w23
+```
+
+```{r}
+#DFBETAS for model 2
+DFBETAcut <- 2/sqrt(n)
+dfb <- dfbetas(model2)
+w24 <- which(abs(dfb[,1]) > DFBETAcut) 
+w24
+
+w25 <- which(abs(dfb[,2]) > DFBETAcut) 
+w25
+```
+
+```{r}
+#plot of all problematic observations
+w_2 <- unique(c(w21, w22, w23, w24, w25))
+
+par(mfrow=c(1,3))
+plot(train[,4]~train[,6], main="cortf transformed vs arrival", xlab="arrival", ylab="cortf^(-0.2)") 
+points(train[w_2,4]~train[w_2,6], col="red", pch=19)
+plot(train[,4]~train[,7], main="cortf transformed vs mass", xlab="body mass", ylab="cortf^(-0.2)") 
+points(train[w_2,4]~train[w_2,7], col="red", pch=19)
+```
+```{r}
+vif(model2)
+```
+
+
+```{r}
+#validation for final model 
+model_valid1 <- lm(cortf^(-0.2) ~ mass + arrival + rel_arrival + lay + rel_lay, data=test)
+summary(model_valid1)
+```
+
+\newpage
+Test dataset validation model:\
+$$\hat y^{-0.2} = 0.8864 + 0.00003*x_1 + 0.0066*x_2 - 0.0091*x_3 - 0.0075*x_4 + 0.0068*x_5$$
+$y$: CORT level in feathers \
+$x_1$: body mass \
+$x_2$: arrival date on the breeding colony \
+$x_3$: relative arrival date \
+$x_4$: lay date \
+$x_5$: relative lay date\
+
+
+```{r}
+vif(model_valid1)
+```
+
+
+```{r}
+#condition 1 for validation set
+plot(test$cortf^(-0.2) ~ fitted(model_valid1), main = "Y versus Y-hat", xlab="Y-hat", ylab="y")
+abline(a=0, b=1)
+lines(lowess(test$cortf^(-0.2) ~ fitted(model_valid1)), lty=2)
+```
+
+
+```{r}
+vr1 <- resid(model_valid1)
+
+#residual vs fitted y
+plot(vr1~fitted(model_valid1), main="r versus fitted Y", xlab="fitted y", ylab="residual")
+```
+
+```{r}
+#residual vs predictors for validation model
+attach(test)
+
+par(mfrow = c(2, 3))
+plot(vr1~mass, main="r versus body mass", xlab="body mass", ylab="residual")
+plot(vr1~rel_arrival, main="r versus relative arrival date", xlab="relative arrival date", ylab="residual")
+plot(vr1~arrival, main="r versus relative arrival date", xlab="relative arrival date", ylab="residual")
+plot(vr1~lay, main="r versus relative arrival date", xlab="relative arrival date", ylab="residual")
+plot(vr1~rel_lay, main="r versus relative arrival date", xlab="relative arrival date", ylab="residual")
+```
+
+
+```{r}
+AIC(model1)
+AIC(model2)
+AIC(model3)
+BIC(model1)
+BIC(model2)
+BIC(model3)
+AIC(model_valid1)
+BIC(model_valid1)
+```
+
+Model | p-value of ANOVA test | AIC | BIC | $R_{adj}^2$ |
+------|---------|--------|---------|-----------|
+model 1 | 0.8413 |-463.0268 | -442.336 | 0.1582|
+model 2 | 0.06374| -458.0344|-443.2553|0.1161|
+model 3 | 0.007934|-452.9947|-441.1714|0.0779|
+test model | |-330.3911|-312.1549|0.1005|
+
+
+Final model:
+$$\hat y^{-0.2} = 0.4993 + 0.00005*x_1 + 0.0085*x_2 - 0.0099*x_3 - 0.0073*x_4 + 0.0067*x_5$$
+$y$: CORT level in feathers \
+$x_1$: body mass \
+$x_2$: arrival date on the breeding colony \
+$x_3$: relative arrival date \
+$x_4$: lay date \
+$x_5$: relative lay date\
+
+
+Predictor | p-value| VIF|
+---------|------|------|
+body mass | 0.02835| 1.0714|
+arrival | 0.0001|5.1409|
+relative arrival | 0.000052|3.9793|
+lay | 0.00368|15.1618|
+relative lay | 0.00889|13.1112|
+
+
+
+
